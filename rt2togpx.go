@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -94,21 +96,42 @@ func gpxPointsFromRt2(rt2 RT2) (gpxPoints []gpx.GPXPoint) {
 	return gpxPoints
 }
 
+// TODO: Read all the info from RT2 and try to push that to
+// correct place in gpx
 func main() {
-	rt2, err := readRT2File("voi2vii.rt2")
+	fileIn := flag.String("rt2file", "", "rt2 file to be converted")
+	fileOut := flag.String("out", "route.gpx", "output gpx file name")
+	verbose := flag.Bool("verbose", false, "Print some details about route")
+	flag.Parse()
+
+	if len(*fileIn) < 1 {
+		flag.PrintDefaults()
+		log.Fatalln("You must give 'rt2file' to convert")
+	}
+	rt2, err := readRT2File(*fileIn)
 	if err != nil {
 		log.Fatalln("Failed to parse RT2 file:", err)
 	}
 	gpxPoints := gpxPointsFromRt2(rt2)
 
 	gpxFile := gpx.GPX{}
+	gpxFile.Creator = "https://github.com/JusbeR/rt2togpx"
 	gpxRoute := gpx.GPXRoute{}
 	gpxFile.Routes = append(gpxFile.Routes, gpxRoute)
 	gpxFile.Routes[0].Points = gpxPoints
 
 	xmlBytes, err := gpxFile.ToXml(gpx.ToXmlParams{Version: "1.1", Indent: true})
 	if err != nil {
-		panic(err)
+		log.Fatalln("Failed to form gpx file:", err)
 	}
-	fmt.Printf("%v", string(xmlBytes))
+	err = ioutil.WriteFile(*fileOut, xmlBytes, 0644)
+	if err != nil {
+		log.Fatalln("Failed to write gpx file:", err)
+	}
+	if *verbose {
+		for _, route := range gpxFile.Routes {
+			log.Printf("Route length: %.2fkm", route.Length()/1000)
+		}
+	}
+	log.Println("GPX file succesfully saved to", *fileOut)
 }
